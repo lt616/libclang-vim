@@ -47,6 +47,7 @@ std::string libclang_vim::stringize_type(CXType const& type) {
     CXTypeKind const type_kind = type.kind;
     cxstring_ptr type_name = clang_getTypeSpelling(type);
     cxstring_ptr type_kind_name = clang_getTypeKindSpelling(type_kind);
+    
     return stringize_key_value("type", type_name) +
            stringize_key_value("type_kind", type_kind_name) +
            stringize_extra_type_info(type);
@@ -170,8 +171,39 @@ std::string libclang_vim::stringize_cursor_kind(CXCursor const& cursor) {
     cxstring_ptr kind_name = clang_getCursorKindSpelling(kind);
     auto const kind_type_name = stringize_cursor_kind_type(kind);
 
+    std::string res_str = "";
+
+    CXTranslationUnit tu = clang_Cursor_getTranslationUnit(cursor);
+
+    const auto* kstring = clang_getCString(kind_name);
+    std::string kind_str = "";
+    if (kstring && std::strcmp(kstring, "") != 0) {
+        kind_str = std::string{kstring};
+    }
+
+    if (kind == CXCursor_IntegerLiteral || kind == CXCursor_FloatingLiteral
+        || kind == CXCursor_CharacterLiteral || kind == CXCursor_StringLiteral
+        || kind == CXCursor_FixedPointLiteral || kind == CXCursor_ImaginaryLiteral)
+    {
+        CXSourceRange range = clang_getCursorExtent(cursor);
+        CXToken *tokens = 0;
+        unsigned int nTokens = 0;
+        clang_tokenize(tu, range, &tokens, &nTokens);
+        for (unsigned int i = 0; i < nTokens; i++)
+        {
+            cxstring_ptr spelling = clang_getTokenSpelling(tu, tokens[i]);
+            const auto*  s = clang_getCString(spelling);
+            if (s && std::strcmp(s, "") != 0) {
+                res_str = "'value': '" + std::string{s} + "',";
+            }
+            //clang_disposeString(spelling);
+        }
+        clang_disposeTokens(tu, tokens, nTokens);
+    }
+
     return stringize_key_value("kind", kind_name) +
-           (kind_type_name.empty() ? std::string{} : ("'kind_type':'" +
+        res_str + 
+        (kind_type_name.empty() ? std::string{} : ("'kind_type':'" +
                                                       kind_type_name + "',")) +
            stringize_cursor_extra_info(cursor);
 }
@@ -193,6 +225,7 @@ std::string libclang_vim::stringize_cursor(CXCursor const& cursor,
            stringize_type(clang_getCursorType(cursor)) +
            stringize_linkage(cursor) + stringize_parent(cursor, parent) +
            stringize_cursor_location(cursor) + stringize_cursor_kind(cursor) +
+           stringize_end(cursor) +   
            stringize_included_file(cursor);
 }
 
@@ -203,6 +236,14 @@ std::string libclang_vim::stringize_range(CXSourceRange const& range) {
     return "'range':{'start':{" +
            stringize_location(clang_getRangeStart(range)) + "},'end':{" +
            stringize_location(clang_getRangeEnd(range)) + "}},";
+}
+
+std::string libclang_vim::stringize_end(CXCursor const& cursor) {
+    auto const r = clang_getCursorExtent(cursor);
+    if (clang_Range_isNull(r))
+        return "";
+    return "'start':{" + stringize_location(clang_getRangeStart(r)) +
+           "},'end':{" + stringize_location(clang_getRangeEnd(r)) + "},";
 }
 
 std::string libclang_vim::stringize_extent(CXCursor const& cursor) {

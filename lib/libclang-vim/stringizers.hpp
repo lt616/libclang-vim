@@ -37,6 +37,8 @@ std::string stringize_cursor(CXCursor const& cursor, CXCursor const& parent);
 
 std::string stringize_range(CXSourceRange const& range);
 
+std::string stringize_end(CXCursor const& currsor);
+
 std::string stringize_extent(CXCursor const& cursor);
 
 } // namespace libclang_vim
